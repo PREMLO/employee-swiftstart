@@ -45,7 +45,7 @@ const StatusTracker = ({ currentStatus }: StatusTrackerProps) => {
     { 
       id: 'selected', 
       name: 'Selected', 
-      description: 'Congratulations! You've been selected',
+      description: "Congratulations! You've been selected",
       icon: ThumbsUp,
       color: 'text-green-500',
       bgColor: 'bg-green-50',
