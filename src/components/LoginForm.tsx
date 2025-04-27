@@ -1,33 +1,24 @@
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const { signIn, loading } = useAuth();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    if (!email || !password) {
+      toast.error('Please enter valid credentials');
+      return;
+    }
     
-    // Simulating API call
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      // Simple validation
-      if (email && password) {
-        toast.success('Login successful');
-        navigate('/agreement');
-      } else {
-        toast.error('Please enter valid credentials');
-      }
-    }, 1500);
+    await signIn(email, password);
   };
   
   return (
@@ -66,9 +57,9 @@ const LoginForm = () => {
       <Button
         type="submit"
         className="w-full h-11 rounded-lg bg-primary hover:bg-primary/90 transition-all duration-200"
-        disabled={isLoading}
+        disabled={loading}
       >
-        {isLoading ? 'Signing in...' : 'Sign in'}
+        {loading ? 'Signing in...' : 'Sign in'}
       </Button>
     </form>
   );
