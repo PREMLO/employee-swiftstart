@@ -19,9 +19,8 @@ const AdminLoginForm = () => {
       return;
     }
     
-    // Validate that it's an admin email
     if (!email.endsWith('@admin.com')) {
-      toast.error('Please use an admin email address');
+      toast.error('Please use an admin email address (ending with @admin.com)');
       return;
     }
     
@@ -31,27 +30,25 @@ const AdminLoginForm = () => {
   return (
     <form onSubmit={handleSubmit} className="space-y-5 w-full scale-in-transition">
       <div className="space-y-2">
-        <Label htmlFor="admin-email">Admin Email</Label>
+        <Label htmlFor="email">Admin Email</Label>
         <Input
-          id="admin-email"
+          id="email"
           type="email"
-          placeholder="admin@example.com"
+          placeholder="admin@admin.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="input-field"
           required
         />
+        <p className="text-xs text-muted-foreground">
+          Admin email must end with @admin.com
+        </p>
       </div>
       
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="admin-password">Password</Label>
-          <button type="button" className="text-xs text-primary hover:text-primary/80 transition-colors">
-            Forgot password?
-          </button>
-        </div>
+        <Label htmlFor="password">Password</Label>
         <Input
-          id="admin-password"
+          id="password"
           type="password"
           placeholder="••••••••"
           value={password}
@@ -66,7 +63,7 @@ const AdminLoginForm = () => {
         className="w-full h-11 rounded-lg bg-primary hover:bg-primary/90 transition-all duration-200"
         disabled={loading}
       >
-        {loading ? 'Signing in...' : 'Sign in as Admin'}
+        {loading ? 'Signing in...' : 'Admin Sign in'}
       </Button>
     </form>
   );

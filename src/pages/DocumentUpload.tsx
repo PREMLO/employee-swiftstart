@@ -1,111 +1,127 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Navbar from '@/components/Navbar';
+import DocumentUploader from '@/components/DocumentUploader';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import DocumentUploader from '@/components/DocumentUploader';
-import Navbar from '@/components/Navbar';
+import { supabase } from '@/integrations/supabase/client';
 
 const DocumentUpload = () => {
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [completedDocs, setCompletedDocs] = useState<string[]>([]);
+  const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, boolean>>({
+    resume: false,
+    class10: false,
+    class12: false,
+    degree: false
+  });
+  const [loading, setLoading] = useState(false);
   
-  const documents = [
-    {
-      id: 'profile',
-      title: 'Profile Picture',
-      description: 'Upload a professional headshot photo',
-      allowedTypes: '.jpg,.jpeg,.png',
-      required: true,
-    },
-    {
-      id: 'class10',
-      title: 'Class 10 Certificate',
-      description: 'Upload your Class 10 certificate or marksheet',
-      allowedTypes: '.pdf,.jpg,.jpeg,.png',
-      required: true,
-    },
-    {
-      id: 'class12',
-      title: 'Class 12 Certificate',
-      description: 'Upload your Class 12 certificate or marksheet',
-      allowedTypes: '.pdf,.jpg,.jpeg,.png',
-      required: true,
-    },
-    {
-      id: 'degree',
-      title: 'College Degree',
-      description: 'Upload your college degree certificate',
-      allowedTypes: '.pdf,.jpg,.jpeg,.png',
-      required: true,
-    },
-    {
-      id: 'resume',
-      title: 'Resume/CV',
-      description: 'Upload your latest resume or CV',
-      allowedTypes: '.pdf,.docx',
-      required: true,
-    },
-    {
-      id: 'experience',
-      title: 'Experience Certificates',
-      description: 'Upload any experience or work certificates (if applicable)',
-      allowedTypes: '.pdf,.jpg,.jpeg,.png',
-      required: false,
-    },
-  ];
+  const handleUploadComplete = (type: string) => {
+    setUploadedDocuments(prev => ({
+      ...prev,
+      [type]: true
+    }));
+  };
   
-  // For the demo, we're simulating the upload completion
-  // In a real application, this would be tracked based on actual file uploads
-  const requiredDocs = documents.filter(doc => doc.required).map(doc => doc.id);
-  
-  // We're tracking it based on listener in DocumentUploader for demo
-  const handleSubmit = () => {
-    // In a real app, we would validate all required documents are uploaded
-    // For the demo, let's simulate a success
-    setIsSubmitting(true);
+  const handleSubmit = async () => {
+    const requiredDocuments = ['resume', 'class10', 'class12'];
+    const missingDocuments = requiredDocuments.filter(doc => !uploadedDocuments[doc]);
     
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast.success('Documents submitted successfully');
+    if (missingDocuments.length > 0) {
+      toast.error(`Please upload all required documents: ${missingDocuments.join(', ')}`);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('applications')
+        .update({
+          status: 'under-review',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+        
+      if (error) throw error;
+      
+      toast.success('Documents uploaded successfully!');
       navigate('/application-status');
-    }, 1500);
+    } catch (error: any) {
+      toast.error(error.message || 'Error updating application status');
+    } finally {
+      setLoading(false);
+    }
   };
   
   return (
     <div className="min-h-screen flex flex-col page-transition">
       <Navbar />
       
-      <div className="flex-1 flex flex-col pt-24 pb-16 px-4 max-w-4xl mx-auto w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-medium">Document Upload</h1>
-          <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
-            Please upload the required documents to complete your application
-          </p>
-        </div>
-        
-        <div className="space-y-6 mb-8">
-          {documents.map((doc) => (
-            <div key={doc.id} className="scale-in-transition">
-              <DocumentUploader
-                type={doc.id as any}
-                title={doc.title}
-                description={`${doc.description}${doc.required ? ' (Required)' : ' (Optional)'}`}
-                allowedTypes={doc.allowedTypes}
-              />
-            </div>
-          ))}
-        </div>
-        
-        <div className="mt-auto pt-8 flex justify-end">
-          <Button
-            onClick={handleSubmit}
-            className="w-full md:w-auto px-8 h-11 bg-primary hover:bg-primary/90 transition-all duration-200"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit Documents'}
-          </Button>
+      <div className="flex-1 pt-24 pb-16 px-4">
+        <div className="max-w-4xl mx-auto">
+          <Card className="scale-in-transition">
+            <CardHeader>
+              <CardTitle className="text-2xl">Document Upload</CardTitle>
+              <CardDescription>
+                Please upload the required documents to complete your onboarding process
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div>
+                <h3 className="text-lg font-medium mb-4">Required Documents</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <DocumentUploader 
+                    type="resume" 
+                    title="Resume/CV" 
+                    description="Upload your most recent resume or curriculum vitae"
+                    allowedTypes=".pdf,.doc,.docx"
+                    onUploadComplete={() => handleUploadComplete('resume')}
+                  />
+                  
+                  <DocumentUploader 
+                    type="class10" 
+                    title="10th Class Certificate" 
+                    description="Upload your 10th class marksheet or certificate"
+                    allowedTypes=".pdf,.jpg,.jpeg,.png"
+                    onUploadComplete={() => handleUploadComplete('class10')}
+                  />
+                  
+                  <DocumentUploader 
+                    type="class12" 
+                    title="12th Class Certificate" 
+                    description="Upload your 12th class marksheet or certificate"
+                    allowedTypes=".pdf,.jpg,.jpeg,.png"
+                    onUploadComplete={() => handleUploadComplete('class12')}
+                  />
+                  
+                  <DocumentUploader 
+                    type="degree" 
+                    title="Degree Certificate" 
+                    description="Upload your degree or diploma certificate (optional)"
+                    allowedTypes=".pdf,.jpg,.jpeg,.png"
+                    onUploadComplete={() => handleUploadComplete('degree')}
+                  />
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button 
+                variant="outline" 
+                onClick={() => navigate('/profile-info')}
+              >
+                Back
+              </Button>
+              <Button 
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? 'Submitting...' : 'Submit Documents'}
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       </div>
     </div>

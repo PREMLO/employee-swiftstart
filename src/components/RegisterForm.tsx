@@ -5,17 +5,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const RegisterForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const { signUp, loading } = useAuth();
+  const navigate = useNavigate();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
+    if (!email || !password || !firstName || !lastName) {
       toast.error('Please fill all required fields');
       return;
     }
@@ -30,11 +34,42 @@ const RegisterForm = () => {
       return;
     }
     
-    await signUp(email, password);
+    const success = await signUp(email, password, { firstName, lastName });
+    if (success) {
+      navigate('/profile-info');
+    }
   };
   
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 w-full scale-in-transition">
+    <form onSubmit={handleSubmit} className="space-y-4 w-full scale-in-transition">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="first-name">First Name</Label>
+          <Input
+            id="first-name"
+            type="text"
+            placeholder="John"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="input-field"
+            required
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="last-name">Last Name</Label>
+          <Input
+            id="last-name"
+            type="text"
+            placeholder="Doe"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="input-field"
+            required
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="register-email">Email</Label>
         <Input

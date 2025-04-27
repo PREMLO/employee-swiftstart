@@ -9,16 +9,22 @@ import { Database } from '@/integrations/supabase/types';
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Application = Database['public']['Tables']['applications']['Row'];
 
+interface UserMetadata {
+  firstName?: string;
+  lastName?: string;
+}
+
 interface AuthContextProps {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   application: Application | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<boolean>;
+  signUp: (email: string, password: string, metadata?: UserMetadata) => Promise<boolean>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -81,6 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshProfile = async () => {
+    await fetchProfile();
+  };
+
   const fetchApplication = async () => {
     if (!user) return;
 
@@ -104,24 +114,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success('Signed in successfully');
-      navigate(isAdmin ? '/admin-dashboard' : '/user-dashboard');
+      
+      // Navigate based on email domain
+      if (email.endsWith('@admin.com')) {
+        navigate('/admin-dashboard');
+      } else {
+        navigate('/user-dashboard');
+      }
+      
+      return true;
     } catch (error: any) {
       toast.error(error.message || 'Error signing in');
       console.error('Sign in error:', error.message);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, metadata?: UserMetadata) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: metadata
+        }
+      });
+      
       if (error) throw error;
       toast.success('Registration successful! Please check your email to verify your account.');
+      return true;
     } catch (error: any) {
       toast.error(error.message || 'Error signing up');
       console.error('Sign up error:', error.message);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -153,7 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signOut,
-        isAdmin
+        isAdmin,
+        refreshProfile
       }}
     >
       {children}

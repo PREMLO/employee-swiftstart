@@ -29,6 +29,9 @@ const AdminLogin = () => {
           </div>
           
           <div className="mt-8 text-center">
+            <p className="text-sm text-muted-foreground mb-2">
+              For testing purposes, use an email ending with @admin.com
+            </p>
             <Link 
               to="/login" 
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
