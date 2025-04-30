@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import DocumentUploader from '@/components/DocumentUploader';
@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DocumentUpload = () => {
   const navigate = useNavigate();
+  const { user, refreshApplication } = useAuth();
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, boolean>>({
     resume: false,
     class10: false,
@@ -17,6 +19,49 @@ const DocumentUpload = () => {
     degree: false
   });
   const [loading, setLoading] = useState(false);
+  const [fetchingStatus, setFetchingStatus] = useState(true);
+  
+  // Fetch already uploaded documents on component mount
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      if (!user) return;
+      
+      try {
+        setFetchingStatus(true);
+        const { data, error } = await supabase
+          .from('documents')
+          .select('document_type')
+          .eq('user_id', user.id);
+          
+        if (error) throw error;
+        
+        // Reset all to false first
+        const uploadStatus = {
+          resume: false,
+          class10: false,
+          class12: false,
+          degree: false
+        };
+        
+        // Mark uploaded documents as true
+        if (data) {
+          data.forEach(doc => {
+            if (uploadStatus.hasOwnProperty(doc.document_type)) {
+              uploadStatus[doc.document_type as keyof typeof uploadStatus] = true;
+            }
+          });
+        }
+        
+        setUploadedDocuments(uploadStatus);
+      } catch (error: any) {
+        toast.error(error.message || 'Error fetching document status');
+      } finally {
+        setFetchingStatus(false);
+      }
+    };
+    
+    fetchDocuments();
+  }, [user]);
   
   const handleUploadComplete = (type: string) => {
     setUploadedDocuments(prev => ({
@@ -37,16 +82,22 @@ const DocumentUpload = () => {
     try {
       setLoading(true);
       
+      if (!user) {
+        toast.error('You must be logged in to continue');
+        return;
+      }
+      
       const { error } = await supabase
         .from('applications')
         .update({
           status: 'under-review',
           updated_at: new Date().toISOString()
         })
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+        .eq('user_id', user.id);
         
       if (error) throw error;
       
+      await refreshApplication();
       toast.success('Documents uploaded successfully!');
       navigate('/application-status');
     } catch (error: any) {
@@ -55,6 +106,17 @@ const DocumentUpload = () => {
       setLoading(false);
     }
   };
+  
+  if (fetchingStatus) {
+    return (
+      <div className="min-h-screen flex flex-col page-transition">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex flex-col page-transition">

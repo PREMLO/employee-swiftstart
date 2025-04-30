@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,8 @@ import { toast } from 'sonner';
 import Navbar from '@/components/Navbar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Shield, Lock } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const Agreement = () => {
   const [accepted, setAccepted] = useState({
@@ -16,23 +17,43 @@ const Agreement = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const allAccepted = Object.values(accepted).every(Boolean);
   
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!allAccepted) {
       toast.error('Please accept all agreements to continue');
+      return;
+    }
+
+    if (!user) {
+      toast.error('You must be logged in to continue');
       return;
     }
     
     setIsSubmitting(true);
     
-    // Simulate submission
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      // Record agreement acceptance in the database
+      const { error } = await supabase
+        .from('agreements')
+        .insert({
+          user_id: user.id,
+          agreed_at: new Date().toISOString(),
+          agreement_version: '1.0'
+        });
+
+      if (error) throw error;
+      
       toast.success('Agreements accepted successfully');
       navigate('/profile-info');
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error saving agreement:', error);
+      toast.error('Failed to save your agreement. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   return (

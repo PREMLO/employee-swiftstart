@@ -14,6 +14,9 @@ interface UserMetadata {
   lastName?: string;
 }
 
+// Define user onboarding steps
+export type OnboardingStep = 'agreement' | 'profile-info' | 'document-upload' | 'application-status' | 'completed';
+
 interface AuthContextProps {
   session: Session | null;
   user: User | null;
@@ -25,6 +28,9 @@ interface AuthContextProps {
   signOut: () => Promise<void>;
   isAdmin: boolean;
   refreshProfile: () => Promise<void>;
+  refreshApplication: () => Promise<void>;
+  currentOnboardingStep: OnboardingStep;
+  checkOnboardingStatus: () => Promise<OnboardingStep>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -36,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentOnboardingStep, setCurrentOnboardingStep] = useState<OnboardingStep>('agreement');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,6 +76,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setApplication(null);
     }
   }, [user]);
+
+  // Check onboarding status when user, profile or application changes
+  useEffect(() => {
+    if (user) {
+      checkOnboardingStatus().then(step => setCurrentOnboardingStep(step));
+    }
+  }, [user, profile, application]);
 
   const fetchProfile = async () => {
     if (!user) return;
@@ -108,6 +122,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshApplication = async () => {
+    await fetchApplication();
+  };
+
+  const checkOnboardingStatus = async (): Promise<OnboardingStep> => {
+    if (!user) return 'agreement';
+
+    try {
+      // Check if user has accepted agreement
+      const { data: agreements, error: agreementsError } = await supabase
+        .from('agreements')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (agreementsError) throw agreementsError;
+
+      if (!agreements) {
+        return 'agreement';
+      }
+
+      // Check if user has completed profile
+      if (!profile || !profile.first_name || !profile.last_name || !profile.phone) {
+        return 'profile-info';
+      }
+
+      // Check if user has uploaded required documents
+      const { data: documents, error: documentsError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (documentsError) throw documentsError;
+
+      const requiredDocs = ['resume', 'class10', 'class12'];
+      const uploadedDocTypes = documents?.map(doc => doc.document_type) || [];
+      
+      const missingDocs = requiredDocs.filter(docType => !uploadedDocTypes.includes(docType));
+      
+      if (missingDocs.length > 0) {
+        return 'document-upload';
+      }
+
+      // Check application status
+      if (application?.status === 'selected') {
+        return 'completed';
+      }
+
+      return 'application-status';
+    } catch (error: any) {
+      console.error('Error checking onboarding status:', error.message);
+      return 'agreement';
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -115,11 +184,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       toast.success('Signed in successfully');
       
-      // Navigate based on email domain
+      // Navigate based on email domain for admins
       if (email.endsWith('@admin.com')) {
         navigate('/admin-dashboard');
-      } else {
-        navigate('/user-dashboard');
+        return true;
+      }
+      
+      // For regular users, check onboarding status and redirect accordingly
+      const nextStep = await checkOnboardingStatus();
+      
+      switch (nextStep) {
+        case 'agreement':
+          navigate('/agreement');
+          break;
+        case 'profile-info':
+          navigate('/profile-info');
+          break;
+        case 'document-upload':
+          navigate('/document-upload');
+          break;
+        case 'application-status':
+          navigate('/application-status');
+          break;
+        case 'completed':
+          navigate('/user-dashboard');
+          break;
       }
       
       return true;
@@ -182,7 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signOut,
         isAdmin,
-        refreshProfile
+        refreshProfile,
+        refreshApplication,
+        currentOnboardingStep,
+        checkOnboardingStatus
       }}
     >
       {children}

@@ -98,6 +98,8 @@ const ProfileInfoForm = () => {
       
       toast.success('Profile information updated successfully!');
       await refreshProfile();
+      
+      // Now navigate to document upload page
       navigate('/document-upload');
     } catch (error: any) {
       toast.error(error.message || 'Error updating profile information');
@@ -267,7 +269,7 @@ const ProfileInfoForm = () => {
         <Button 
           type="button" 
           variant="outline" 
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/agreement')}
         >
           Back
         </Button>

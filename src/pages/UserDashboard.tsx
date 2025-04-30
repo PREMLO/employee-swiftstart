@@ -10,10 +10,11 @@ import { Separator } from '@/components/ui/separator';
 import { User, ChevronRight, FileText, Calendar, ClipboardCheck, BookOpen, Settings, Bell } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 
 const UserDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const { user, profile, application } = useAuth();
+  const { user, profile, application, signOut } = useAuth();
   const navigate = useNavigate();
   
   // Task state
@@ -27,6 +28,14 @@ const UserDashboard = () => {
   // Resources state
   const [resources, setResources] = useState<any[]>([]);
   const [resourcesLoading, setResourcesLoading] = useState(true);
+  
+  // Documents state
+  const [documents, setDocuments] = useState<Record<string, boolean>>({
+    resume: false,
+    class10: false,
+    class12: false,
+    degree: false
+  });
   
   // Fetch tasks
   useEffect(() => {
@@ -97,6 +106,45 @@ const UserDashboard = () => {
     fetchResources();
   }, []);
   
+  // Fetch documents
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('document_type')
+          .eq('user_id', user.id);
+          
+        if (error) throw error;
+        
+        // Reset all to false first
+        const uploadStatus = {
+          resume: false,
+          class10: false,
+          class12: false,
+          degree: false
+        };
+        
+        // Mark uploaded documents as true
+        if (data) {
+          data.forEach(doc => {
+            if (uploadStatus.hasOwnProperty(doc.document_type)) {
+              uploadStatus[doc.document_type as keyof typeof uploadStatus] = true;
+            }
+          });
+        }
+        
+        setDocuments(uploadStatus);
+      } catch (error: any) {
+        console.error('Error fetching document status:', error.message);
+      }
+    };
+    
+    fetchDocuments();
+  }, [user]);
+  
   // Calculate task stats
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
@@ -106,7 +154,7 @@ const UserDashboard = () => {
   
   // Prepare user data
   const userData = {
-    name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Loading...',
+    name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Welcome',
     position: profile?.position || 'New Employee',
     department: profile?.department || 'Onboarding',
     joinDate: profile?.join_date ? new Date(profile.join_date).toLocaleDateString() : 'Pending',
@@ -155,6 +203,10 @@ const UserDashboard = () => {
     navigate('/application-status');
   };
   
+  const handleLogout = () => {
+    signOut();
+  };
+  
   return (
     <div className="min-h-screen flex flex-col page-transition">
       <Navbar />
@@ -188,6 +240,15 @@ const UserDashboard = () => {
             >
               <Settings className="w-5 h-5 text-muted-foreground" />
             </button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleLogout}
+              className="ml-2"
+            >
+              Log out
+            </Button>
           </div>
         </div>
         
@@ -320,28 +381,40 @@ const UserDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 border rounded-lg flex flex-col items-center text-center">
-                    <FileText className="w-8 h-8 text-primary mb-2" />
+                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.resume ? 'border-green-200 bg-green-50' : ''}`}>
+                    <FileText className={`w-8 h-8 mb-2 ${documents.resume ? 'text-green-500' : 'text-primary'}`} />
                     <h4 className="font-medium">Resume/CV</h4>
                     <p className="text-xs text-muted-foreground mt-1">Required</p>
+                    {documents.resume && (
+                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
+                    )}
                   </div>
                   
-                  <div className="p-4 border rounded-lg flex flex-col items-center text-center">
-                    <FileText className="w-8 h-8 text-primary mb-2" />
+                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.class10 ? 'border-green-200 bg-green-50' : ''}`}>
+                    <FileText className={`w-8 h-8 mb-2 ${documents.class10 ? 'text-green-500' : 'text-primary'}`} />
                     <h4 className="font-medium">10th Certificate</h4>
                     <p className="text-xs text-muted-foreground mt-1">Required</p>
+                    {documents.class10 && (
+                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
+                    )}
                   </div>
                   
-                  <div className="p-4 border rounded-lg flex flex-col items-center text-center">
-                    <FileText className="w-8 h-8 text-primary mb-2" />
+                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.class12 ? 'border-green-200 bg-green-50' : ''}`}>
+                    <FileText className={`w-8 h-8 mb-2 ${documents.class12 ? 'text-green-500' : 'text-primary'}`} />
                     <h4 className="font-medium">12th Certificate</h4>
                     <p className="text-xs text-muted-foreground mt-1">Required</p>
+                    {documents.class12 && (
+                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
+                    )}
                   </div>
                   
-                  <div className="p-4 border rounded-lg flex flex-col items-center text-center">
-                    <FileText className="w-8 h-8 text-muted-foreground mb-2" />
+                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.degree ? 'border-green-200 bg-green-50' : ''}`}>
+                    <FileText className={`w-8 h-8 mb-2 ${documents.degree ? 'text-green-500' : 'text-muted-foreground'}`} />
                     <h4 className="font-medium">Degree</h4>
                     <p className="text-xs text-muted-foreground mt-1">Optional</p>
+                    {documents.degree && (
+                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -443,7 +516,7 @@ const UserDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
-                  {displayResources.map((resource, index) => {
+                  {displayResources.map((resource: any, index) => {
                     const IconComponent = resource.icon || FileText;
                     
                     return (
