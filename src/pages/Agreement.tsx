@@ -17,7 +17,7 @@ const Agreement = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, checkOnboardingStatus } = useAuth();
   
   const allAccepted = Object.values(accepted).every(Boolean);
   
@@ -47,7 +47,14 @@ const Agreement = () => {
       if (error) throw error;
       
       toast.success('Agreements accepted successfully');
-      navigate('/profile-info');
+      
+      // Update onboarding status in auth context before navigating
+      await checkOnboardingStatus();
+      
+      // Navigate after a short delay to ensure state updates
+      setTimeout(() => {
+        navigate('/profile-info');
+      }, 100);
     } catch (error: any) {
       console.error('Error saving agreement:', error);
       toast.error('Failed to save your agreement. Please try again.');
