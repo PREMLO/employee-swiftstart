@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select';
 
 const ProfileInfoForm = () => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, checkOnboardingStatus } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   
@@ -42,6 +42,7 @@ const ProfileInfoForm = () => {
   
   useEffect(() => {
     if (profile) {
+      console.log('Setting form data from profile:', profile);
       setFirstName(profile.first_name || '');
       setLastName(profile.last_name || '');
       setPhone(profile.phone || '');
@@ -74,6 +75,7 @@ const ProfileInfoForm = () => {
     try {
       setLoading(true);
       
+      console.log('Updating profile for user:', user.id);
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -94,13 +96,23 @@ const ProfileInfoForm = () => {
         })
         .eq('id', user.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Profile update error:', error);
+        throw error;
+      }
       
+      console.log('Profile updated successfully');
       toast.success('Profile information updated successfully!');
       await refreshProfile();
       
-      // Now navigate to document upload page
-      navigate('/document-upload');
+      // Check next onboarding step before navigating
+      const nextStep = await checkOnboardingStatus();
+      console.log('Next step after profile update:', nextStep);
+      
+      // Now navigate to document upload page with a small delay
+      setTimeout(() => {
+        navigate('/document-upload');
+      }, 500);
     } catch (error: any) {
       toast.error(error.message || 'Error updating profile information');
       console.error('Profile update error:', error.message);

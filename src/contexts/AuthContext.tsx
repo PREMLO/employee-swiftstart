@@ -94,13 +94,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
+      console.log('Fetching profile for user:', user.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) {
+        console.error('Error fetching profile:', error);
+        if (error.code !== 'PGRST116') throw error;
+      }
+      
+      console.log('Fetched profile:', data);
       setProfile(data || null);
     } catch (error: any) {
       console.error('Error fetching profile:', error.message);
@@ -115,13 +121,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
+      console.log('Fetching application for user:', user.id);
       const { data, error } = await supabase
         .from('applications')
         .select('*')
         .eq('user_id', user.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) {
+        console.error('Error fetching application:', error);
+        if (error.code !== 'PGRST116') throw error;
+      }
+      
+      console.log('Fetched application:', data);
       setApplication(data || null);
     } catch (error: any) {
       console.error('Error fetching application:', error.message);
@@ -136,6 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user || isAdmin) return 'completed';
 
     try {
+      console.log('Checking onboarding status for user:', user.id);
+      
       // Check if application is already completed (selected/rejected)
       if (application) {
         if (application.status === 'selected' || application.status === 'rejected') {
@@ -150,8 +164,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (agreementsError && agreementsError.code !== 'PGRST116') throw agreementsError;
+      if (agreementsError) {
+        console.error('Error checking agreements:', agreementsError);
+        if (agreementsError.code !== 'PGRST116') throw agreementsError;
+      }
 
+      console.log('Agreement data:', agreements);
       if (!agreements) {
         return 'agreement';
       }
@@ -167,8 +185,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .eq('user_id', user.id);
 
-      if (documentsError) throw documentsError;
+      if (documentsError) {
+        console.error('Error checking documents:', documentsError);
+        throw documentsError;
+      }
 
+      console.log('Documents data:', documents);
       const requiredDocs = ['resume', 'class10', 'class12'];
       const uploadedDocTypes = documents?.map(doc => doc.document_type) || [];
       
@@ -188,8 +210,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
+      console.log('Attempting sign in for:', email);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      
+      if (error) {
+        console.error('Sign in error:', error);
+        throw error;
+      }
       
       // Check if this is admin login
       const isUserAdmin = email === 'anitejmishra@gmail.com' || email.endsWith('@admin.com');
@@ -202,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // For non-admin users, check onboarding status and redirect accordingly
       const nextStep = await checkOnboardingStatus();
+      console.log('Next onboarding step:', nextStep);
       
       switch (nextStep) {
         case 'agreement':
@@ -235,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, metadata?: UserMetadata) => {
     try {
       setLoading(true);
+      console.log('Attempting sign up for:', email);
       const { error } = await supabase.auth.signUp({ 
         email, 
         password,

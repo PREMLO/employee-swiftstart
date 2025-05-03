@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,7 @@ const Agreement = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user, checkOnboardingStatus } = useAuth();
+  const { user, checkOnboardingStatus, refreshProfile, refreshApplication } = useAuth();
   
   const allAccepted = Object.values(accepted).every(Boolean);
   
@@ -35,26 +36,37 @@ const Agreement = () => {
     setIsSubmitting(true);
     
     try {
+      console.log('Saving agreement for user:', user.id);
       // Record agreement acceptance in the database
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('agreements')
         .insert({
           user_id: user.id,
           agreed_at: new Date().toISOString(),
           agreement_version: '1.0'
-        });
+        })
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving agreement:', error);
+        throw error;
+      }
       
+      console.log('Agreement saved:', data);
       toast.success('Agreements accepted successfully');
       
+      // Refresh user data before navigating
+      await refreshProfile();
+      await refreshApplication();
+      
       // Update onboarding status in auth context before navigating
-      await checkOnboardingStatus();
+      const nextStep = await checkOnboardingStatus();
+      console.log('Next step after agreement:', nextStep);
       
       // Navigate after a short delay to ensure state updates
       setTimeout(() => {
         navigate('/profile-info');
-      }, 100);
+      }, 500);
     } catch (error: any) {
       console.error('Error saving agreement:', error);
       toast.error('Failed to save your agreement. Please try again.');

@@ -1,3 +1,4 @@
+
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
@@ -25,6 +26,15 @@ const ProtectedRoute = ({
       // Wait for auth loading to complete
       if (loading) return;
 
+      console.log('Checking route access:', { 
+        requireAuth, 
+        requireAdmin, 
+        user: !!user, 
+        isAdmin, 
+        currentOnboardingStep, 
+        requiredStep 
+      });
+
       // If we need specific onboarding step and user is authenticated
       if (requireAuth && user && requiredStep) {
         // If user is admin, they can bypass onboarding steps
@@ -33,6 +43,8 @@ const ProtectedRoute = ({
           const steps = ['agreement', 'profile-info', 'document-upload', 'application-status', 'completed'];
           const currentStepIndex = steps.indexOf(currentOnboardingStep);
           const requiredStepIndex = steps.indexOf(requiredStep);
+
+          console.log('Step check:', { currentStepIndex, requiredStepIndex });
 
           // User hasn't completed previous steps, redirect to their current step
           if (currentStepIndex < requiredStepIndex) {
@@ -93,6 +105,8 @@ const ProtectedRoute = ({
       </div>
     );
   }
+
+  console.log('Route access decision:', { shouldRedirect, redirectPath });
 
   // If we should redirect to a specific path in the onboarding flow
   if (shouldRedirect && redirectPath) {
