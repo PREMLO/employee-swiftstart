@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,74 +9,173 @@ import { Button } from '@/components/ui/button';
 import EmployeeCard from '@/components/EmployeeCard';
 import { Separator } from '@/components/ui/separator';
 import { UserPlus, Search, Filter, ChevronDown, BarChart3, Users, ClipboardCheck } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+
+interface Employee {
+  id: string;
+  name: string;
+  position: string;
+  email: string;
+  joinDate: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'issue';
+  completedSteps: number;
+  totalSteps: number;
+}
+
+interface ApplicationUser {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  position: string | null;
+  application_status: string;
+  document_count: number;
+}
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('employees');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock data for employees
-  const employees = [
-    {
-      id: 'e1',
-      name: 'Alex Johnson',
-      position: 'Software Developer',
-      email: 'alex.johnson@example.com',
-      joinDate: 'June 10, 2023',
-      status: 'in-progress' as const,
-      completedSteps: 3,
-      totalSteps: 6,
-    },
-    {
-      id: 'e2',
-      name: 'Jessica Williams',
-      position: 'UI/UX Designer',
-      email: 'jessica.williams@example.com',
-      joinDate: 'June 8, 2023',
-      status: 'completed' as const,
-      completedSteps: 6,
-      totalSteps: 6,
-    },
-    {
-      id: 'e3',
-      name: 'Michael Brown',
-      position: 'Product Manager',
-      email: 'michael.brown@example.com',
-      joinDate: 'June 15, 2023',
-      status: 'pending' as const,
-      completedSteps: 1,
-      totalSteps: 6,
-    },
-    {
-      id: 'e4',
-      name: 'Emily Davis',
-      position: 'Marketing Specialist',
-      email: 'emily.davis@example.com',
-      joinDate: 'June 12, 2023',
-      status: 'issue' as const,
-      completedSteps: 2,
-      totalSteps: 6,
-    },
-    {
-      id: 'e5',
-      name: 'Robert Wilson',
-      position: 'Data Analyst',
-      email: 'robert.wilson@example.com',
-      joinDate: 'June 5, 2023',
-      status: 'in-progress' as const,
-      completedSteps: 4,
-      totalSteps: 6,
-    },
-    {
-      id: 'e6',
-      name: 'Sophia Martinez',
-      position: 'Customer Support',
-      email: 'sophia.martinez@example.com',
-      joinDate: 'June 7, 2023',
-      status: 'in-progress' as const,
-      completedSteps: 5,
-      totalSteps: 6,
-    },
-  ];
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [applications, setApplications] = useState<ApplicationUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    
+    fetchApplicationsAndUsers();
+  }, [user]);
+
+  const fetchApplicationsAndUsers = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all applications with their related profiles
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          id,
+          user_id,
+          status,
+          profiles:profiles(id, first_name, last_name, position, email, join_date)
+        `);
+      
+      if (error) throw error;
+      
+      // Count documents for each user
+      const employeesList: Employee[] = [];
+      const applicationsList: ApplicationUser[] = [];
+      
+      for (const app of data || []) {
+        // Count user documents
+        const { data: docs, error: docsError } = await supabase
+          .from('documents')
+          .select('*', { count: 'exact' })
+          .eq('user_id', app.user_id);
+          
+        if (docsError) throw docsError;
+        
+        const docCount = docs?.length || 0;
+        
+        // Get user email
+        const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(app.user_id);
+        
+        if (authError) {
+          console.error('Error fetching user details:', authError);
+          continue;
+        }
+        
+        const profile = app.profiles;
+        const email = authUser?.user?.email || 'No email';
+        const name = profile?.first_name && profile?.last_name 
+          ? `${profile.first_name} ${profile.last_name}`
+          : email;
+          
+        const position = profile?.position || 'Applicant';
+        const joinDate = profile?.join_date ? new Date(profile.join_date).toLocaleDateString() : 'N/A';
+        
+        // Calculate status
+        let status: 'pending' | 'in-progress' | 'completed' | 'issue' = 'pending';
+        let completedSteps = 0;
+        
+        // Check if they have accepted agreement
+        const { data: agreement } = await supabase
+          .from('agreements')
+          .select('*')
+          .eq('user_id', app.user_id)
+          .single();
+          
+        if (agreement) completedSteps++;
+        
+        // Check if profile is complete
+        if (profile?.first_name && profile?.last_name && profile?.phone) completedSteps++;
+        
+        // Check document uploads
+        if (docCount >= 3) completedSteps++;
+        
+        // Set status based on application state and completed steps
+        if (app.status === 'selected') {
+          status = 'completed';
+          completedSteps = 6;
+        } else if (app.status === 'rejected') {
+          status = 'issue';
+        } else if (app.status === 'under-review' || app.status === 'interview-scheduled') {
+          status = 'in-progress';
+        }
+        
+        // Add to employees list
+        employeesList.push({
+          id: app.user_id,
+          name,
+          position,
+          email,
+          joinDate,
+          status,
+          completedSteps,
+          totalSteps: 6
+        });
+        
+        // Add to applications list
+        applicationsList.push({
+          id: app.user_id,
+          email,
+          first_name: profile?.first_name || null,
+          last_name: profile?.last_name || null,
+          position: profile?.position || null,
+          application_status: app.status,
+          document_count: docCount
+        });
+      }
+      
+      setEmployees(employeesList);
+      setApplications(applicationsList);
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+      toast.error('Failed to fetch applications data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Process application
+  const processApplication = async (userId: string, status: 'selected' | 'rejected' | 'under-review' | 'interview-scheduled' | 'pending-documents') => {
+    try {
+      const { error } = await supabase
+        .from('applications')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+        
+      if (error) throw error;
+      
+      toast.success(`Application ${status === 'selected' ? 'approved' : status === 'rejected' ? 'rejected' : 'updated'} successfully`);
+      fetchApplicationsAndUsers();
+    } catch (error) {
+      console.error('Error updating application:', error);
+      toast.error('Failed to update application status');
+    }
+  };
   
   // Filter employees based on search query
   const filteredEmployees = employees.filter(employee => 
@@ -95,7 +194,7 @@ const AdminDashboard = () => {
   // Calculate completion percentage
   const overallCompletionSteps = employees.reduce((acc, curr) => acc + curr.completedSteps, 0);
   const totalSteps = employees.reduce((acc, curr) => acc + curr.totalSteps, 0);
-  const overallCompletionPercentage = Math.round((overallCompletionSteps / totalSteps) * 100);
+  const overallCompletionPercentage = totalSteps > 0 ? Math.round((overallCompletionSteps / totalSteps) * 100) : 0;
   
   return (
     <div className="min-h-screen flex flex-col page-transition">
@@ -109,9 +208,12 @@ const AdminDashboard = () => {
             <p className="text-muted-foreground">Manage and monitor employee onboarding progress</p>
           </div>
           
-          <Button className="h-10 bg-primary hover:bg-primary/90 transition-all duration-200">
+          <Button 
+            className="h-10 bg-primary hover:bg-primary/90 transition-all duration-200"
+            onClick={() => fetchApplicationsAndUsers()}
+          >
             <UserPlus className="w-4 h-4 mr-2" />
-            Add New Employee
+            Refresh Data
           </Button>
         </div>
         
@@ -151,7 +253,7 @@ const AdminDashboard = () => {
               </div>
               <div className="mt-4">
                 <p className="text-xs text-blue-500">
-                  {Math.round((inProgressOnboarding / totalEmployees) * 100)}% of employees
+                  {totalEmployees ? Math.round((inProgressOnboarding / totalEmployees) * 100) : 0}% of employees
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Currently in onboarding process</p>
               </div>
@@ -171,7 +273,7 @@ const AdminDashboard = () => {
               </div>
               <div className="mt-4">
                 <p className="text-xs text-green-500">
-                  {Math.round((completedOnboarding / totalEmployees) * 100)}% of employees
+                  {totalEmployees ? Math.round((completedOnboarding / totalEmployees) * 100) : 0}% of employees
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Successfully completed onboarding</p>
               </div>
@@ -193,7 +295,7 @@ const AdminDashboard = () => {
               </div>
               <div className="mt-4">
                 <p className="text-xs text-red-500">
-                  {Math.round((issuesCount / totalEmployees) * 100)}% of employees
+                  {totalEmployees ? Math.round((issuesCount / totalEmployees) * 100) : 0}% of employees
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">Have issues with onboarding</p>
               </div>
@@ -205,7 +307,7 @@ const AdminDashboard = () => {
         <Tabs defaultValue="employees" className="w-full" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-2 mb-8 max-w-md mx-auto scale-in-transition">
             <TabsTrigger value="employees">Employees</TabsTrigger>
-            <TabsTrigger value="reports">Reports</TabsTrigger>
+            <TabsTrigger value="applications">Applications</TabsTrigger>
           </TabsList>
           
           <TabsContent value="employees" className="space-y-6">
@@ -233,7 +335,11 @@ const AdminDashboard = () => {
                   </Button>
                 </div>
                 
-                {filteredEmployees.length > 0 ? (
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                  </div>
+                ) : filteredEmployees.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredEmployees.map((employee) => (
                       <EmployeeCard key={employee.id} {...employee} />
@@ -248,81 +354,87 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
           
-          <TabsContent value="reports" className="space-y-6">
+          <TabsContent value="applications" className="space-y-6">
             <Card className="scale-in-transition">
               <CardHeader>
-                <CardTitle>Onboarding Analytics</CardTitle>
-                <CardDescription>Insights and statistics about the onboarding process</CardDescription>
+                <CardTitle>Application Management</CardTitle>
+                <CardDescription>Review and process new applications</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">Overall Completion Rate</h3>
-                    <div className="bg-muted/30 p-6 rounded-lg">
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm font-medium">Progress</span>
-                          <span className="text-sm font-medium">{overallCompletionPercentage}%</span>
-                        </div>
-                        <Progress value={overallCompletionPercentage} className="h-2" />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-                        <div className="text-center">
-                          <p className="text-2xl font-medium text-primary">{totalEmployees}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Total Employees</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-medium text-blue-500">{inProgressOnboarding}</p>
-                          <p className="text-xs text-muted-foreground mt-1">In Progress</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-medium text-green-500">{completedOnboarding}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Completed</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-medium text-red-500">{issuesCount}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Issues</p>
-                        </div>
-                      </div>
-                    </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
                   </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">Average Completion Time</h3>
-                    <div className="bg-muted/30 p-6 rounded-lg">
-                      <div className="text-center">
-                        <p className="text-3xl font-medium">7.5 days</p>
-                        <p className="text-sm text-muted-foreground mt-2">Average time to complete onboarding</p>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-6">
-                        <div className="p-4 bg-white rounded-lg shadow-apple-sm">
-                          <p className="text-lg font-medium">5.2 days</p>
-                          <p className="text-xs text-muted-foreground mt-1">Development Team</p>
-                        </div>
-                        <div className="p-4 bg-white rounded-lg shadow-apple-sm">
-                          <p className="text-lg font-medium">8.7 days</p>
-                          <p className="text-xs text-muted-foreground mt-1">Design Team</p>
-                        </div>
-                        <div className="p-4 bg-white rounded-lg shadow-apple-sm">
-                          <p className="text-lg font-medium">9.3 days</p>
-                          <p className="text-xs text-muted-foreground mt-1">Marketing Team</p>
-                        </div>
-                      </div>
-                    </div>
+                ) : applications.length > 0 ? (
+                  <div className="space-y-6">
+                    {applications.map((application) => (
+                      <Card key={application.id} className="relative">
+                        <CardContent className="p-6">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between">
+                            <div className="space-y-2 mb-4 md:mb-0">
+                              <h3 className="text-lg font-medium">
+                                {application.first_name && application.last_name 
+                                  ? `${application.first_name} ${application.last_name}`
+                                  : application.email}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">{application.position || 'No position specified'}</p>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs bg-muted px-2 py-1 rounded-full">
+                                  {application.document_count} documents
+                                </span>
+                                <span className={cn("text-xs px-2 py-1 rounded-full", {
+                                  'bg-blue-50 text-blue-500': application.application_status === 'submitted',
+                                  'bg-amber-50 text-amber-500': application.application_status === 'under-review',
+                                  'bg-purple-50 text-purple-500': application.application_status === 'interview-scheduled',
+                                  'bg-orange-50 text-orange-500': application.application_status === 'pending-documents',
+                                  'bg-green-50 text-green-500': application.application_status === 'selected',
+                                  'bg-red-50 text-red-500': application.application_status === 'rejected',
+                                })}>
+                                  {application.application_status.replace(/-/g, ' ')}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline" 
+                                onClick={() => processApplication(application.id, 'under-review')}
+                              >
+                                Mark as Reviewing
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => processApplication(application.id, 'interview-scheduled')}
+                              >
+                                Schedule Interview
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="destructive" 
+                                onClick={() => processApplication(application.id, 'rejected')}
+                              >
+                                Reject
+                              </Button>
+                              <Button 
+                                size="sm"
+                                variant="default" 
+                                onClick={() => processApplication(application.id, 'selected')}
+                              >
+                                Approve
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                  
-                  <Separator />
-                  
-                  <div className="text-center">
-                    <Button variant="outline" className="h-10">
-                      Generate Full Report
-                    </Button>
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground">No applications found</p>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

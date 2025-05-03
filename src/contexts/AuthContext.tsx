@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setIsAdmin(session?.user?.email?.endsWith('@admin.com') ?? false);
+        // Check if user is admin (either by email domain or specific hardcoded admin email)
+        const isUserAdmin = session?.user?.email === 'anitejmishra@gmail.com' || 
+                          (session?.user?.email?.endsWith('@admin.com') ?? false);
+        setIsAdmin(isUserAdmin);
       }
     );
 
@@ -59,7 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email?.endsWith('@admin.com') ?? false);
+      // Check if user is admin (either by email domain or specific hardcoded admin email)
+      const isUserAdmin = session?.user?.email === 'anitejmishra@gmail.com' || 
+                        (session?.user?.email?.endsWith('@admin.com') ?? false);
+      setIsAdmin(isUserAdmin);
       setLoading(false);
     });
 
@@ -94,8 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', user.id)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error && error.code !== 'PGRST116') throw error;
+      setProfile(data || null);
     } catch (error: any) {
       console.error('Error fetching profile:', error.message);
     }
@@ -115,8 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .single();
 
-      if (error) throw error;
-      setApplication(data);
+      if (error && error.code !== 'PGRST116') throw error;
+      setApplication(data || null);
     } catch (error: any) {
       console.error('Error fetching application:', error.message);
     }
@@ -127,9 +133,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const checkOnboardingStatus = async (): Promise<OnboardingStep> => {
-    if (!user) return 'agreement';
+    if (!user || isAdmin) return 'completed';
 
     try {
+      // Check if application is already completed (selected/rejected)
+      if (application) {
+        if (application.status === 'selected' || application.status === 'rejected') {
+          return 'completed';
+        }
+      }
+      
       // Check if user has accepted agreement
       const { data: agreements, error: agreementsError } = await supabase
         .from('agreements')
@@ -137,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (agreementsError) throw agreementsError;
+      if (agreementsError && agreementsError.code !== 'PGRST116') throw agreementsError;
 
       if (!agreements) {
         return 'agreement';
@@ -165,11 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return 'document-upload';
       }
 
-      // Check application status
-      if (application?.status === 'selected') {
-        return 'completed';
-      }
-
       return 'application-status';
     } catch (error: any) {
       console.error('Error checking onboarding status:', error.message);
@@ -182,15 +190,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      toast.success('Signed in successfully');
       
-      // Navigate based on email domain for admins
-      if (email.endsWith('@admin.com')) {
+      // Check if this is admin login
+      const isUserAdmin = email === 'anitejmishra@gmail.com' || email.endsWith('@admin.com');
+      
+      if (isUserAdmin) {
         navigate('/admin-dashboard');
+        toast.success('Admin logged in successfully');
         return true;
       }
       
-      // For regular users, check onboarding status and redirect accordingly
+      // For non-admin users, check onboarding status and redirect accordingly
       const nextStep = await checkOnboardingStatus();
       
       switch (nextStep) {
@@ -211,6 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           break;
       }
       
+      toast.success('Signed in successfully');
       return true;
     } catch (error: any) {
       toast.error(error.message || 'Error signing in');
@@ -233,7 +244,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       if (error) throw error;
-      toast.success('Registration successful! Please check your email to verify your account.');
+      
+      // After signup, sign in automatically and redirect to agreement page
+      await signIn(email, password);
       return true;
     } catch (error: any) {
       toast.error(error.message || 'Error signing up');

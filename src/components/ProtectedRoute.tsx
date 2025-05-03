@@ -1,4 +1,3 @@
-
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
@@ -54,6 +53,28 @@ const ProtectedRoute = ({
                 setRedirectPath('/application-status');
                 setShouldRedirect(true);
                 break;
+            }
+          }
+          
+          // User has completed this step already, redirect them to the next step
+          // unless they're explicitly trying to access a completed step
+          else if (currentStepIndex > requiredStepIndex && requiredStep !== 'completed') {
+            // If user is already at application-status or completed, don't redirect them back
+            if (currentOnboardingStep === 'application-status' || currentOnboardingStep === 'completed') {
+              // Allow them to view their current step
+              // No redirect needed
+            } else {
+              // Otherwise redirect to their current step
+              switch (currentOnboardingStep) {
+                case 'profile-info':
+                  setRedirectPath('/profile-info');
+                  setShouldRedirect(true);
+                  break;
+                case 'document-upload':
+                  setRedirectPath('/document-upload');
+                  setShouldRedirect(true);
+                  break;
+              }
             }
           }
         }

@@ -1,506 +1,335 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import TaskCard from '@/components/TaskCard';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { User, ChevronRight, FileText, Calendar, ClipboardCheck, BookOpen, Settings, Bell } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, FileText, Clock, CheckCircle } from 'lucide-react';
+import TaskCard from '@/components/TaskCard';
+import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  due_date?: string;
+  priority?: string;
+  status: string;
+}
 
 const UserDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const { user, profile, application, signOut } = useAuth();
-  const navigate = useNavigate();
-  
-  // Task state
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  
-  // Events state
-  const [events, setEvents] = useState<any[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  
-  // Resources state
+  const [greeting, setGreeting] = useState('Good day');
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [resources, setResources] = useState<any[]>([]);
-  const [resourcesLoading, setResourcesLoading] = useState(true);
-  
-  // Documents state
-  const [documents, setDocuments] = useState<Record<string, boolean>>({
-    resume: false,
-    class10: false,
-    class12: false,
-    degree: false
-  });
-  
-  // Fetch tasks
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user, profile } = useAuth();
+
   useEffect(() => {
-    const fetchTasks = async () => {
-      if (!user) return;
-      
-      try {
-        setTasksLoading(true);
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('due_date', { ascending: true });
-          
-        if (error) throw error;
-        setTasks(data || []);
-      } catch (error) {
-        console.error('Error fetching tasks:', error);
-      } finally {
-        setTasksLoading(false);
-      }
+    const getTimeBasedGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour < 12) return 'Good morning';
+      if (hour < 18) return 'Good afternoon';
+      return 'Good evening';
     };
     
-    fetchTasks();
-  }, [user]);
-  
-  // Fetch events
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setEventsLoading(true);
-        const { data, error } = await supabase
-          .from('events')
-          .select('*')
-          .order('date', { ascending: true })
-          .limit(5);
-          
-        if (error) throw error;
-        setEvents(data || []);
-      } catch (error) {
-        console.error('Error fetching events:', error);
-      } finally {
-        setEventsLoading(false);
-      }
-    };
-    
-    fetchEvents();
+    setGreeting(getTimeBasedGreeting());
+    fetchUserData();
   }, []);
-  
-  // Fetch resources
-  useEffect(() => {
-    const fetchResources = async () => {
-      try {
-        setResourcesLoading(true);
-        const { data, error } = await supabase
-          .from('resources')
-          .select('*');
-          
-        if (error) throw error;
-        setResources(data || []);
-      } catch (error) {
-        console.error('Error fetching resources:', error);
-      } finally {
-        setResourcesLoading(false);
-      }
-    };
+
+  const fetchUserData = async () => {
+    if (!user) return;
     
-    fetchResources();
-  }, []);
-  
-  // Fetch documents
-  useEffect(() => {
-    const fetchDocuments = async () => {
-      if (!user) return;
+    setLoading(true);
+    try {
+      // Fetch user tasks
+      const { data: userTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('due_date', { ascending: true });
+        
+      if (tasksError) throw tasksError;
+      setTasks(userTasks || []);
       
-      try {
-        const { data, error } = await supabase
-          .from('documents')
-          .select('document_type')
-          .eq('user_id', user.id);
-          
-        if (error) throw error;
+      // Fetch resources
+      const { data: resourcesData, error: resourcesError } = await supabase
+        .from('resources')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(3);
         
-        // Reset all to false first
-        const uploadStatus = {
-          resume: false,
-          class10: false,
-          class12: false,
-          degree: false
-        };
+      if (resourcesError) throw resourcesError;
+      setResources(resourcesData || []);
+      
+      // Fetch upcoming events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
+        .limit(3);
         
-        // Mark uploaded documents as true
-        if (data) {
-          data.forEach(doc => {
-            if (uploadStatus.hasOwnProperty(doc.document_type)) {
-              uploadStatus[doc.document_type as keyof typeof uploadStatus] = true;
-            }
-          });
-        }
-        
-        setDocuments(uploadStatus);
-      } catch (error: any) {
-        console.error('Error fetching document status:', error.message);
-      }
-    };
-    
-    fetchDocuments();
-  }, [user]);
-  
+      if (eventsError) throw eventsError;
+      setEvents(eventsData || []);
+    } catch (error) {
+      console.error('Error fetching user dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Calculate task stats
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const pendingTasks = tasks.filter(task => task.status === 'pending').length;
-  const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
-  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  
-  // Prepare user data
-  const userData = {
-    name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Welcome',
-    position: profile?.position || 'New Employee',
-    department: profile?.department || 'Onboarding',
-    joinDate: profile?.join_date ? new Date(profile.join_date).toLocaleDateString() : 'Pending',
-    manager: 'HR Department',
-    employeeId: profile?.employee_id || 'Not assigned yet',
-    email: user?.email || '',
-    phone: profile?.phone || 'Not provided',
-  };
-  
-  // Default resources if none found
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const pendingTasks = tasks.filter(t => t.status === 'pending').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Default resources
   const defaultResources = [
     {
-      id: 'default-1',
+      id: 'res1',
       title: 'Employee Handbook',
-      description: 'Company policies, benefits, and guidelines',
-      type: 'Document',
-      icon: FileText,
+      description: 'A comprehensive guide to company policies and procedures',
+      type: 'document',
+      url: '#',
     },
     {
-      id: 'default-2',
-      title: 'Training Schedule',
-      description: 'Upcoming training sessions for new employees',
-      type: 'Calendar',
-      icon: Calendar,
+      id: 'res2',
+      title: 'Benefits Overview',
+      description: 'Learn about your health, retirement, and other benefits',
+      type: 'document',
+      url: '#',
     },
     {
-      id: 'default-3',
-      title: 'Development Guidelines',
-      description: 'Coding standards and best practices',
-      type: 'Document',
-      icon: BookOpen,
+      id: 'res3',
+      title: 'IT Setup Guide',
+      description: 'Step-by-step instructions for setting up your workstation',
+      type: 'guide',
+      url: '#',
     },
   ];
-  
+
   const displayResources = resources.length > 0 ? resources : defaultResources;
-  
-  const handleProfileSettings = () => {
-    navigate('/profile-info');
+
+  const getInitials = () => {
+    if (profile?.first_name && profile?.last_name) {
+      return `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase();
+    }
+    return user?.email ? user.email[0].toUpperCase() : '?';
   };
-  
-  const handleViewDocuments = () => {
-    navigate('/document-upload');
+
+  const generateRandomAvatarUrl = () => {
+    const styles = ['adventurer', 'adventurer-neutral', 'avataaars', 'big-smile', 'bottts', 'croodles', 'fun-emoji'];
+    const randomStyle = styles[Math.floor(Math.random() * styles.length)];
+    return `https://api.dicebear.com/7.x/${randomStyle}/svg?seed=${user?.id || 'default'}`;
   };
-  
-  const handleCheckStatus = () => {
-    navigate('/application-status');
-  };
-  
-  const handleLogout = () => {
-    signOut();
-  };
-  
+
   return (
     <div className="min-h-screen flex flex-col page-transition">
       <Navbar />
       
-      <div className="flex-1 flex flex-col pt-24 pb-16 px-4 max-w-7xl mx-auto w-full">
-        {/* User welcome section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div className="flex items-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="w-8 h-8 text-primary" />
-            </div>
-            <div className="ml-4">
-              <h1 className="text-2xl md:text-3xl font-medium">Welcome, {userData.name}</h1>
-              <p className="text-muted-foreground">{userData.position} • {userData.department}</p>
-            </div>
+      <div className="flex-1 pt-24 pb-16 px-4 max-w-7xl mx-auto w-full">
+        {/* Dashboard header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-medium">{greeting}, {profile?.first_name || user?.email?.split('@')[0] || 'User'}</h1>
+            <p className="text-muted-foreground">Welcome to your employee dashboard</p>
           </div>
           
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={handleCheckStatus}
-              className="flex items-center space-x-1 text-sm px-3 py-1.5 rounded-full bg-secondary/70 hover:bg-secondary transition-colors"
-            >
-              <span>Application Status</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            
-            <button 
-              onClick={handleProfileSettings}
-              className="p-2 rounded-full hover:bg-muted/50 transition-colors" 
-              aria-label="Settings"
-            >
-              <Settings className="w-5 h-5 text-muted-foreground" />
-            </button>
-
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleLogout}
-              className="ml-2"
-            >
-              Log out
-            </Button>
+          <div className="flex items-center mt-4 md:mt-0">
+            <Avatar className="h-10 w-10 border border-muted">
+              <AvatarImage src={generateRandomAvatarUrl()} alt="Avatar" />
+              <AvatarFallback>{getInitials()}</AvatarFallback>
+            </Avatar>
+            <div className="ml-3">
+              <p className="text-sm font-medium">
+                {profile?.first_name && profile?.last_name
+                  ? `${profile.first_name} ${profile.last_name}`
+                  : user?.email?.split('@')[0] || 'User'}
+              </p>
+              <p className="text-xs text-muted-foreground">{profile?.position || 'Employee'}</p>
+            </div>
           </div>
         </div>
         
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card className="scale-in-transition">
+            <CardContent className="p-6">
+              <div className="flex justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Tasks</p>
+                  <p className="text-3xl font-medium mt-1">{totalTasks}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-foreground/70" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="scale-in-transition">
+            <CardContent className="p-6">
+              <div className="flex justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Completed</p>
+                  <p className="text-3xl font-medium mt-1">{completedTasks}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="flex justify-between text-xs mb-1">
+                  <span>{completionRate}% completion rate</span>
+                </div>
+                <Progress className="h-1" value={completionRate} />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="scale-in-transition">
+            <CardContent className="p-6">
+              <div className="flex justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-3xl font-medium mt-1">{pendingTasks}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-amber-500" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="scale-in-transition">
+            <CardContent className="p-6">
+              <div className="flex justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">In Progress</p>
+                  <p className="text-3xl font-medium mt-1">{inProgressTasks}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
         {/* Main content */}
-        <Tabs defaultValue="overview" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 mb-8 max-w-md mx-auto scale-in-transition">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
+        <Tabs defaultValue="tasks" className="w-full">
+          <TabsList className="grid grid-cols-3 max-w-md mx-auto mb-8">
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="events">Calendar</TabsTrigger>
             <TabsTrigger value="resources">Resources</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="overview" className="space-y-6">
-            {/* Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="scale-in-transition">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Task Completion</CardTitle>
-                  <CardDescription>Your onboarding progress</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">{completionPercentage}% Complete</span>
-                      <span className="text-sm text-muted-foreground">{completedTasks}/{totalTasks} Tasks</span>
-                    </div>
-                    <Progress value={completionPercentage} className="h-2" />
-                    
-                    <div className="grid grid-cols-3 gap-4 pt-2">
-                      <div className="text-center">
-                        <div className="text-xl font-medium">{completedTasks}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Completed</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-medium">{inProgressTasks}</div>
-                        <div className="text-xs text-muted-foreground mt-1">In Progress</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xl font-medium">{pendingTasks}</div>
-                        <div className="text-xs text-muted-foreground mt-1">Pending</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="scale-in-transition">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Upcoming Events</CardTitle>
-                  <CardDescription>Your scheduled meetings and events</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {eventsLoading ? (
-                    <div className="space-y-4">
-                      <div className="h-4 bg-muted/50 rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted/50 rounded animate-pulse"></div>
-                      <div className="h-4 bg-muted/50 rounded animate-pulse"></div>
-                    </div>
-                  ) : events.length > 0 ? (
-                    <div className="space-y-4">
-                      {events.slice(0, 3).map((event) => (
-                        <div key={event.id} className="flex justify-between items-start">
-                          <div>
-                            <div className="text-sm font-medium">{event.title}</div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {new Date(event.date).toLocaleDateString()} • {event.time || 'All day'}
-                            </div>
-                          </div>
-                          <span className="inline-block px-2 py-0.5 bg-muted text-xs rounded-full">
-                            {event.type || 'Event'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-4 text-center text-muted-foreground">
-                      <p>No upcoming events</p>
-                      <p className="text-xs mt-1">Check back later for updates</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              <Card className="scale-in-transition">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Your Information</CardTitle>
-                  <CardDescription>Employee details</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-2 gap-1">
-                      <div className="text-muted-foreground">Employee ID</div>
-                      <div className="font-medium">{userData.employeeId}</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <div className="text-muted-foreground">Join Date</div>
-                      <div className="font-medium">{userData.joinDate}</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <div className="text-muted-foreground">Manager</div>
-                      <div className="font-medium">{userData.manager}</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <div className="text-muted-foreground">Email</div>
-                      <div className="font-medium truncate">{userData.email}</div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 pt-3 border-t">
-                    <button 
-                      onClick={handleProfileSettings}
-                      className="text-sm text-primary flex items-center hover:underline"
-                    >
-                      Update Profile <ChevronRight className="w-3 h-3 ml-1" />
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            {/* Documents Status */}
+          <TabsContent value="tasks" className="space-y-6">
             <Card className="scale-in-transition">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Documents</CardTitle>
-                  <CardDescription>Your submitted documents</CardDescription>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>My Tasks</CardTitle>
+                    <CardDescription>Manage your current tasks and assignments</CardDescription>
+                  </div>
                 </div>
-                <button className="text-sm text-primary flex items-center" onClick={handleViewDocuments}>
-                  Manage Documents <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.resume ? 'border-green-200 bg-green-50' : ''}`}>
-                    <FileText className={`w-8 h-8 mb-2 ${documents.resume ? 'text-green-500' : 'text-primary'}`} />
-                    <h4 className="font-medium">Resume/CV</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Required</p>
-                    {documents.resume && (
-                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
-                    )}
-                  </div>
-                  
-                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.class10 ? 'border-green-200 bg-green-50' : ''}`}>
-                    <FileText className={`w-8 h-8 mb-2 ${documents.class10 ? 'text-green-500' : 'text-primary'}`} />
-                    <h4 className="font-medium">10th Certificate</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Required</p>
-                    {documents.class10 && (
-                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
-                    )}
-                  </div>
-                  
-                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.class12 ? 'border-green-200 bg-green-50' : ''}`}>
-                    <FileText className={`w-8 h-8 mb-2 ${documents.class12 ? 'text-green-500' : 'text-primary'}`} />
-                    <h4 className="font-medium">12th Certificate</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Required</p>
-                    {documents.class12 && (
-                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
-                    )}
-                  </div>
-                  
-                  <div className={`p-4 border rounded-lg flex flex-col items-center text-center ${documents.degree ? 'border-green-200 bg-green-50' : ''}`}>
-                    <FileText className={`w-8 h-8 mb-2 ${documents.degree ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <h4 className="font-medium">Degree</h4>
-                    <p className="text-xs text-muted-foreground mt-1">Optional</p>
-                    {documents.degree && (
-                      <span className="inline-block px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full mt-2">Uploaded</span>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* Recent Tasks */}
-            <Card className="scale-in-transition">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Recent Tasks</CardTitle>
-                  <CardDescription>Your assigned onboarding tasks</CardDescription>
-                </div>
-                <button className="text-sm text-primary flex items-center" onClick={() => setActiveTab('tasks')}>
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
-              </CardHeader>
-              <CardContent>
-                {tasksLoading ? (
-                  <div className="space-y-4">
-                    <div className="h-16 bg-muted/50 rounded animate-pulse"></div>
-                    <div className="h-16 bg-muted/50 rounded animate-pulse"></div>
-                    <div className="h-16 bg-muted/50 rounded animate-pulse"></div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
                   </div>
                 ) : tasks.length > 0 ? (
                   <div className="space-y-4">
-                    {tasks.slice(0, 3).map((task) => (
-                      <div key={task.id} className="flex items-start p-3 hover:bg-muted/30 rounded-lg transition-colors">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-primary/10 text-primary flex-shrink-0">
-                          <ClipboardCheck className="w-4 h-4" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <div className="flex items-start justify-between">
-                            <div className="text-sm font-medium">{task.title}</div>
-                            <span 
-                              className={`inline-block px-2 py-0.5 text-xs rounded-full ${
-                                task.status === 'completed' ? 'bg-green-50 text-green-500' :
-                                task.status === 'in-progress' ? 'bg-blue-50 text-blue-500' :
-                                'bg-amber-50 text-amber-500'
-                              }`}
-                            >
-                              {task.status.replace('-', ' ')}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            Due: {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date'}
-                          </div>
-                        </div>
-                      </div>
+                    {tasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        id={task.id}
+                        title={task.title}
+                        description={task.description}
+                        dueDate={task.due_date}
+                        priority={task.priority}
+                        status={task.status}
+                      />
                     ))}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-muted-foreground">
-                    <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No tasks assigned yet</p>
-                    <p className="text-xs mt-1">Check back later</p>
+                  <div className="text-center py-10">
+                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="mt-4 text-lg font-medium">No tasks yet</h3>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                      You don't have any tasks assigned at the moment. Check back later or contact your manager.
+                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
           
-          <TabsContent value="tasks" className="space-y-6">
+          <TabsContent value="events" className="space-y-6">
             <Card className="scale-in-transition">
               <CardHeader>
-                <CardTitle>Assigned Tasks</CardTitle>
-                <CardDescription>Tasks that need to be completed as part of your onboarding</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Upcoming Events</CardTitle>
+                    <CardDescription>Your schedule for the coming days</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {tasksLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="h-48 bg-muted/50 rounded-lg animate-pulse"></div>
-                    ))}
+                {loading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
                   </div>
-                ) : tasks.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {tasks.map((task) => (
-                      <TaskCard key={task.id} {...task} />
+                ) : events.length > 0 ? (
+                  <div className="space-y-4">
+                    {events.map((event) => (
+                      <div 
+                        key={event.id}
+                        className="border rounded-lg p-4 hover:border-primary transition-colors"
+                      >
+                        <div className="flex items-start">
+                          <div className={cn(
+                            "w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0",
+                            event.type === 'meeting' ? 'bg-blue-50 text-blue-500' :
+                            event.type === 'training' ? 'bg-amber-50 text-amber-500' :
+                            'bg-green-50 text-green-500'
+                          )}>
+                            <Calendar className="w-6 h-6" />
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <h4 className="font-medium">{event.title}</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {new Date(event.date).toLocaleDateString()} • {event.time || 'All day'}
+                            </p>
+                            {event.description && (
+                              <p className="text-sm mt-2">{event.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-16 text-center text-muted-foreground">
-                    <ClipboardCheck className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg">No tasks assigned yet</p>
-                    <p className="text-sm mt-2">
-                      Your onboarding tasks will appear here once assigned by HR
+                  <div className="text-center py-10">
+                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                      <Calendar className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="mt-4 text-lg font-medium">No upcoming events</h3>
+                    <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                      You don't have any scheduled events at the moment. Check back later for updates.
                     </p>
                   </div>
                 )}
@@ -511,36 +340,45 @@ const UserDashboard = () => {
           <TabsContent value="resources" className="space-y-6">
             <Card className="scale-in-transition">
               <CardHeader>
-                <CardTitle>Resources & Documentation</CardTitle>
-                <CardDescription>Helpful resources for new employees</CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Resources</CardTitle>
+                    <CardDescription>Helpful documents and information</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {displayResources.map((resource: any, index) => {
-                    const IconComponent = resource.icon || FileText;
-                    
-                    return (
-                      <div key={resource.id || index} className="group">
-                        <div className="flex items-start p-4 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer">
-                          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary/10 text-primary flex-shrink-0">
-                            <IconComponent className="w-5 h-5" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {displayResources.map((resource) => (
+                    <Link 
+                      key={resource.id}
+                      to={resource.url || "#"}
+                      className="block"
+                    >
+                      <div className="border rounded-lg p-4 h-full hover:border-primary hover:shadow-sm transition-all">
+                        <div className="flex items-start h-full flex-col">
+                          <div className={cn(
+                            "w-10 h-10 rounded-md flex items-center justify-center",
+                            resource.type === 'document' ? 'bg-blue-50 text-blue-500' :
+                            resource.type === 'video' ? 'bg-red-50 text-red-500' :
+                            resource.type === 'guide' ? 'bg-amber-50 text-amber-500' :
+                            'bg-green-50 text-green-500'
+                          )}>
+                            <FileText className="w-5 h-5" />
                           </div>
-                          <div className="ml-4 flex-1">
-                            <h3 className="text-base font-medium group-hover:text-primary transition-colors">
-                              {resource.title}
-                            </h3>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {resource.description}
-                            </p>
-                          </div>
-                          <div>
-                            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          <div className="mt-3 flex-1 flex flex-col">
+                            <h4 className="font-medium">{resource.title}</h4>
+                            <p className="text-sm text-muted-foreground mt-1 flex-1">{resource.description}</p>
+                            <div className="mt-4">
+                              <span className="text-xs bg-muted px-2 py-1 rounded-full">
+                                {resource.type}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <Separator className="mt-2" />
                       </div>
-                    );
-                  })}
+                    </Link>
+                  ))}
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,23 +8,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, MessageSquare, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 const ApplicationStatus = () => {
   const navigate = useNavigate();
-  const { application, user, refreshApplication } = useAuth();
-  const [currentStatus, setCurrentStatus] = useState<'submitted' | 'under-review' | 'interview-scheduled' | 'pending-documents' | 'selected' | 'rejected'>('under-review');
+  const { user, application, refreshApplication } = useAuth();
+  const [currentStatus, setCurrentStatus] = useState<'submitted' | 'under-review' | 'interview-scheduled' | 'pending-documents' | 'selected' | 'rejected'>('submitted');
   const [activeTab, setActiveTab] = useState('status');
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
+    if (user) {
+      refreshApplication();
+      fetchActivitiesAndEvents();
+    }
+  }, [user]);
+  
+  useEffect(() => {
     if (application) {
       setCurrentStatus(application.status as any);
     }
-    
-    fetchActivitiesAndEvents();
-  }, [application, user]);
+  }, [application]);
   
   const fetchActivitiesAndEvents = async () => {
     if (!user) return;
@@ -91,6 +96,16 @@ const ApplicationStatus = () => {
           description: 'You have accepted the required agreements and policies.',
         });
       }
+
+      // Check for application status changes
+      if (application) {
+        activities.push({
+          id: 'application-status',
+          activity: `Application Status: ${application.status}`,
+          timestamp: new Date(application.updated_at).toLocaleString(),
+          description: `Your application status has been updated to ${application.status.replace(/-/g, ' ')}.`
+        });
+      }
       
       // Sort activities by timestamp
       activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -107,7 +122,7 @@ const ApplicationStatus = () => {
       if (eventsError) throw eventsError;
       
       setUpcomingEvents(events || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching activities:', error);
     } finally {
       setLoading(false);
@@ -152,6 +167,25 @@ const ApplicationStatus = () => {
               Go to Dashboard
             </Button>
           </div>
+        ) : currentStatus === 'rejected' ? (
+          <div className="text-center mb-8 animate-scale-in">
+            <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-medium text-red-500">Application Not Selected</h2>
+            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
+              We regret to inform you that your application was not selected at this time. Thank you for your interest.
+            </p>
+            <Button
+              onClick={() => navigate('/')}
+              className="mt-6 px-8 h-11 bg-muted hover:bg-muted/80 transition-all duration-200"
+              variant="outline"
+            >
+              Return to Home
+            </Button>
+          </div>
         ) : (
           <Tabs defaultValue="status" className="w-full" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid grid-cols-3 mb-8 scale-in-transition">
@@ -172,7 +206,7 @@ const ApplicationStatus = () => {
                   {currentStatus === 'submitted' && (
                     <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                       <p className="text-amber-800 text-sm">
-                        Your application has been submitted and is pending review. Please upload the required documents to proceed.
+                        Your application has been submitted and is pending review. We will review your application soon.
                       </p>
                     </div>
                   )}
@@ -201,13 +235,22 @@ const ApplicationStatus = () => {
                     </div>
                   )}
                   
-                  {currentStatus === 'rejected' && (
-                    <div className="mt-8 p-4 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-red-800 text-sm">
-                        Unfortunately, we are unable to proceed with your application at this time. Thank you for your interest.
-                      </p>
-                    </div>
-                  )}
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Your application is being reviewed by our team. This process typically takes 3-5 business days.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => {
+                        refreshApplication();
+                        fetchActivitiesAndEvents();
+                        toast.success("Status updated!");
+                      }}
+                    >
+                      Refresh Status
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

@@ -3,9 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { LogOut, User, UserCircle } from 'lucide-react';
 
 const Navbar = () => {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, signOut, isAdmin, profile } = useAuth();
   const location = useLocation();
 
   const isHomePage = location.pathname === '/';
@@ -24,31 +25,37 @@ const Navbar = () => {
         
         <nav className="hidden md:flex items-center space-x-1">
           {user ? (
-            <>
+            <div className="flex items-center gap-4">
               {isAdmin ? (
                 <Link 
                   to="/admin-dashboard" 
                   className="px-4 py-2 rounded-md hover:bg-muted transition-colors"
                 >
-                  Dashboard
+                  Admin Dashboard
                 </Link>
               ) : (
-                <Link 
-                  to="/user-dashboard" 
-                  className="px-4 py-2 rounded-md hover:bg-muted transition-colors"
-                >
-                  Dashboard
-                </Link>
+                <div className="flex items-center">
+                  <div className="mr-2 text-sm">
+                    {profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}` : user.email}
+                  </div>
+                  <Link 
+                    to="/user-dashboard" 
+                    className="px-4 py-2 rounded-md hover:bg-muted transition-colors flex items-center"
+                  >
+                    <UserCircle className="h-4 w-4 mr-1" /> Dashboard
+                  </Link>
+                </div>
               )}
               
               <Button
                 variant="outline"
                 onClick={() => signOut()}
-                className="ml-2"
+                className="flex items-center"
+                size="sm"
               >
-                Log out
+                <LogOut className="h-4 w-4 mr-1" /> Log out
               </Button>
-            </>
+            </div>
           ) : (
             <>
               <Link 
@@ -74,8 +81,9 @@ const Navbar = () => {
               variant="outline"
               size="sm"
               onClick={() => signOut()}
+              className="flex items-center gap-1"
             >
-              Log out
+              <LogOut className="h-3 w-3" /> Log out
             </Button>
           ) : (
             <Link 
