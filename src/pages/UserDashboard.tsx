@@ -22,6 +22,7 @@ interface Task {
   due_date?: string;
   priority?: TaskPriority;
   status: TaskStatus;
+  assigned_by?: string; // Add assigned_by to match the database field
 }
 
 const UserDashboard = () => {
@@ -266,10 +267,11 @@ const UserDashboard = () => {
                         key={task.id}
                         id={task.id}
                         title={task.title}
-                        description={task.description}
-                        dueDate={task.due_date}
-                        priority={task.priority}
+                        description={task.description || ''}
+                        dueDate={task.due_date || 'No due date'}
+                        priority={task.priority || 'medium'}
                         status={task.status}
+                        assignedBy={task.assigned_by}
                       />
                     ))}
                   </div>

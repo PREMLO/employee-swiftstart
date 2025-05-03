@@ -13,7 +13,7 @@ interface TaskCardProps {
   dueDate: string;
   priority: TaskPriority;
   status: TaskStatus;
-  assignedBy: string;
+  assignedBy?: string; // Make this prop optional
 }
 
 const TaskCard = ({
@@ -84,10 +84,12 @@ const TaskCard = ({
         </div>
       </div>
       
-      <div className="mt-4 space-y-1">
-        <p className="text-xs text-muted-foreground">Assigned by</p>
-        <p className="text-sm">{assignedBy}</p>
-      </div>
+      {assignedBy && (
+        <div className="mt-4 space-y-1">
+          <p className="text-xs text-muted-foreground">Assigned by</p>
+          <p className="text-sm">{assignedBy}</p>
+        </div>
+      )}
       
       {currentStatus !== 'completed' && (
         <button
