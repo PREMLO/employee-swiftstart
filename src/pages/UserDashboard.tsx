@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -13,13 +12,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
+type TaskPriority = 'low' | 'medium' | 'high';
+type TaskStatus = 'pending' | 'in-progress' | 'completed';
+
 interface Task {
   id: string;
   title: string;
   description?: string;
   due_date?: string;
-  priority?: string;
-  status: string;
+  priority?: TaskPriority;
+  status: TaskStatus;
 }
 
 const UserDashboard = () => {
@@ -55,7 +57,15 @@ const UserDashboard = () => {
         .order('due_date', { ascending: true });
         
       if (tasksError) throw tasksError;
-      setTasks(userTasks || []);
+      
+      // Transform task data to ensure proper types
+      const typedTasks = (userTasks || []).map(task => ({
+        ...task,
+        priority: (task.priority as TaskPriority) || 'medium',
+        status: (task.status as TaskStatus) || 'pending'
+      }));
+      
+      setTasks(typedTasks);
       
       // Fetch resources
       const { data: resourcesData, error: resourcesError } = await supabase

@@ -12,6 +12,7 @@ import { UserPlus, Search, Filter, ChevronDown, BarChart3, Users, ClipboardCheck
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Employee {
   id: string;
@@ -52,23 +53,30 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch all applications with their related profiles
-      const { data, error } = await supabase
+      // Fetch all applications
+      const { data: applicationsData, error: applicationsError } = await supabase
         .from('applications')
-        .select(`
-          id,
-          user_id,
-          status,
-          profiles:profiles(id, first_name, last_name, position, email, join_date)
-        `);
+        .select('id, user_id, status');
       
-      if (error) throw error;
+      if (applicationsError) throw applicationsError;
       
-      // Count documents for each user
+      // Fetch user profiles separately
       const employeesList: Employee[] = [];
       const applicationsList: ApplicationUser[] = [];
       
-      for (const app of data || []) {
+      for (const app of applicationsData || []) {
+        // Get profile for this user
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', app.user_id)
+          .single();
+          
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Error fetching profile:', profileError);
+          continue;
+        }
+        
         // Count user documents
         const { data: docs, error: docsError } = await supabase
           .from('documents')
@@ -87,7 +95,6 @@ const AdminDashboard = () => {
           continue;
         }
         
-        const profile = app.profiles;
         const email = authUser?.user?.email || 'No email';
         const name = profile?.first_name && profile?.last_name 
           ? `${profile.first_name} ${profile.last_name}`
