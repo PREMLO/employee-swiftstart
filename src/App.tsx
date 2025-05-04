@@ -38,25 +38,12 @@ const App = () => (
               <Route path="/admin-login" element={<AdminLogin />} />
             </Route>
             
-            {/* Protected routes with specific step requirements */}
-            <Route element={<ProtectedRoute requireAuth={true} requiredStep="agreement" />}>
+            {/* All user routes - just require authentication, no step requirements */}
+            <Route element={<ProtectedRoute requireAuth={true} />}>
               <Route path="/agreement" element={<Agreement />} />
-            </Route>
-            
-            <Route element={<ProtectedRoute requireAuth={true} requiredStep="profile-info" />}>
               <Route path="/profile-info" element={<ProfileInfo />} />
-            </Route>
-            
-            <Route element={<ProtectedRoute requireAuth={true} requiredStep="document-upload" />}>
               <Route path="/document-upload" element={<DocumentUpload />} />
-            </Route>
-            
-            <Route element={<ProtectedRoute requireAuth={true} requiredStep="application-status" />}>
               <Route path="/application-status" element={<ApplicationStatus />} />
-            </Route>
-            
-            {/* Protected routes - for completed onboarding */}
-            <Route element={<ProtectedRoute requireAuth={true} requiredStep="completed" />}>
               <Route path="/user-dashboard" element={<UserDashboard />} />
             </Route>
             

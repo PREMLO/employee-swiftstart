@@ -7,7 +7,6 @@ import Navbar from '@/components/Navbar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Shield, Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 
 const Agreement = () => {
   const [accepted, setAccepted] = useState({
@@ -35,11 +34,13 @@ const Agreement = () => {
     setIsSubmitting(true);
     
     try {
-      console.log('Saving agreement for user:', user.id);
+      console.log('Agreement accepted for user:', user.id);
       
-      // Simply navigate to the next page
+      // Simply show success and navigate - no database call
       toast.success('Agreements accepted successfully');
-      navigate('/profile-info');
+      setTimeout(() => {
+        navigate('/profile-info');
+      }, 500);
     } catch (error: any) {
       console.error('Error saving agreement:', error);
       toast.error('Failed to save your agreement. Please try again.');

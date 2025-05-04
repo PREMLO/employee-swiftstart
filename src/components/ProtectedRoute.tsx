@@ -16,7 +16,7 @@ const ProtectedRoute = ({
   redirectTo = '/login',
   requiredStep
 }: ProtectedRouteProps) => {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin, currentOnboardingStep } = useAuth();
   
   if (loading) {
     return (
@@ -41,6 +41,7 @@ const ProtectedRoute = ({
     return <Navigate to={isAdmin ? '/admin-dashboard' : '/user-dashboard'} replace />;
   }
 
+  // Don't enforce onboarding flow for now - allow users to access all pages
   return <Outlet />;
 };
 

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,9 +26,16 @@ const ProfileInfoForm = () => {
       return;
     }
     
+    if (!user) {
+      toast.error('You must be logged in to continue');
+      return;
+    }
+    
     setLoading(true);
     
     try {
+      console.log('Saving profile info for user:', user.id, { firstName, lastName, phone, email, department });
+      
       // Simplified - just show success message and navigate
       toast.success('Profile information saved successfully!');
       
@@ -38,6 +44,7 @@ const ProfileInfoForm = () => {
         navigate('/document-upload');
       }, 500);
     } catch (error: any) {
+      console.error('Error updating profile:', error);
       toast.error('Error updating profile information');
     } finally {
       setLoading(false);
